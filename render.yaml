@@ -1,0 +1,26 @@
+# Blueprint Render — déploiement du backend Nel / Happy Let's GO
+# Dashboard : New → Blueprint → connecter le repo, ou créer un Web Service manuellement.
+#
+# Secrets à ajouter dans le dashboard Render (Environment) :
+#   RESEND_API_KEY, EMAIL_FROM, JWT_SECRET (ou laisser generateValue)
+
+services:
+  - type: web
+    name: hlg-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_PUBLIC_URL
+        value: https://happyletsgo.fr
+      - key: ALLOWED_ORIGINS
+        value: https://happyletsgo.fr,https://www.happyletsgo.fr,http://localhost:5173
+      - key: VAPID_SUBJECT
+        value: mailto:contact@happyletsgo.fr
