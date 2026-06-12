@@ -3,7 +3,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// .env racine (VITE_GOOGLE_SHEETS_*) puis backend/.env (JWT, Mailjet…)
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
@@ -11,10 +10,9 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { Server } from "socket.io";
 import { allowedOrigins, port } from "./lib/config.js";
-import { storageMode } from "./lib/chatStore.js";
 import { authStorageMode } from "./lib/authStore.js";
+import { storageMode } from "./lib/chatStore.js";
 import { isPushConfigured } from "./lib/pushService.js";
-import { isSheetsReadConfigured } from "./lib/googleSheets.js";
 import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chat.js";
 import { pushRoutes } from "./routes/push.js";
@@ -33,7 +31,7 @@ app.get("/api/health", async () => ({
   service: "hlg-chat-api",
   storage: storageMode(),
   auth: authStorageMode(),
-  sheets: isSheetsReadConfigured(),
+  authMode: "front-sheets-login",
   realtime: "socket.io",
   push: isPushConfigured(),
   timestamp: Date.now(),
