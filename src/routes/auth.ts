@@ -1,13 +1,15 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   createToken,
-  loginUser,
+  markUserEmailVerified,
   requestPasswordResetForEmail,
   resetPasswordByToken,
   resendVerificationForEmail,
   signupUser,
+  validateLoginCredentials,
   verifyEmailByToken,
   verifyToken,
+  toAuthUser,
 } from "../lib/authStore.js";
 import { shouldSkipEmailVerification } from "../lib/appConfig.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/emailService.js";
@@ -55,7 +57,21 @@ export async function authRoutes(app: FastifyInstance) {
       try {
         const email = request.body?.email ?? "";
         const password = request.body?.password ?? "";
-        const user = loginUser(email, password);
+        const stored = await validateLoginCredentials(email, password);
+
+        if (!stored.emailVerified) {
+          const skipVerify = await shouldSkipEmailVerification();
+          if (skipVerify) {
+            await markUserEmailVerified(stored.email);
+            stored.emailVerified = true;
+          } else {
+            throw new Error(
+              "Veuillez confirmer votre email avant de vous connecter. Consultez votre boîte mail ou renvoyez l'email de vérification.",
+            );
+          }
+        }
+
+        const user = toAuthUser(stored);
         const token = await createToken(user);
         return { user, token };
       } catch (err) {
@@ -74,9 +90,12 @@ export async function authRoutes(app: FastifyInstance) {
       const password = request.body?.password ?? "";
       const displayName = request.body?.displayName ?? "";
       const skipVerify = await shouldSkipEmailVerification();
-      const { user, verificationToken } = signupUser(email, password, displayName, {
-        skipEmailVerification: skipVerify,
-      });
+      const { user, verificationToken } = await signupUser(
+        email,
+        password,
+        displayName,
+        { skipEmailVerification: skipVerify },
+      );
 
       if (skipVerify) {
         const token = await createToken(user);
@@ -122,7 +141,7 @@ export async function authRoutes(app: FastifyInstance) {
     async (request, reply) => {
       try {
         const token = request.query?.token ?? "";
-        const user = verifyEmailByToken(token);
+        const user = await verifyEmailByToken(token);
         const jwt = await createToken(user);
         return { ok: true, user, token: jwt };
       } catch (err) {
@@ -137,7 +156,7 @@ export async function authRoutes(app: FastifyInstance) {
     async (request, reply) => {
       try {
         const email = request.body?.email ?? "";
-        const result = resendVerificationForEmail(email);
+        const result = await resendVerificationForEmail(email);
         if (!result) {
           return reply.status(200).send({
             ok: true,
@@ -182,7 +201,7 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Email requis" });
       }
 
-      const result = requestPasswordResetForEmail(email);
+      const result = await requestPasswordResetForEmail(email);
       if (!result) {
         return { ok: true, message: FORGOT_PASSWORD_MESSAGE };
       }
@@ -212,7 +231,7 @@ export async function authRoutes(app: FastifyInstance) {
       try {
         const token = request.body?.token ?? "";
         const password = request.body?.password ?? "";
-        const user = resetPasswordByToken(token, password);
+        const user = await resetPasswordByToken(token, password);
         const jwt = await createToken(user);
         return {
           ok: true,
