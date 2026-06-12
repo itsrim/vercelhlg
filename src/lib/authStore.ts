@@ -126,6 +126,7 @@ export function signupUser(
   email: string,
   password: string,
   displayName: string,
+  options?: { skipEmailVerification?: boolean },
 ): SignupResult {
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail || !password || !displayName.trim()) {
@@ -138,19 +139,25 @@ export function signupUser(
     throw new Error("Cet email est déjà utilisé");
   }
 
-  const verificationToken = createVerificationToken();
+  const skipVerify = options?.skipEmailVerification === true;
+  const verificationToken = skipVerify ? undefined : createVerificationToken();
   const user: StoredUser = {
     id: `user_${Date.now()}_${randomBytes(4).toString("hex")}`,
     email: normalizedEmail,
     displayName: displayName.trim(),
     password,
-    emailVerified: false,
+    emailVerified: skipVerify,
     verificationToken,
-    verificationExpiresAt: Date.now() + VERIFICATION_TTL_MS,
+    verificationExpiresAt: skipVerify
+      ? undefined
+      : Date.now() + VERIFICATION_TTL_MS,
   };
 
   registerUser(user);
-  return { user: toAuthUser(user), verificationToken };
+  return {
+    user: toAuthUser(user),
+    verificationToken: verificationToken ?? "",
+  };
 }
 
 export function verifyEmailByToken(token: string): AuthUser {

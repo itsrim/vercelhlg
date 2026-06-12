@@ -7,6 +7,7 @@ import {
   verifyEmailByToken,
   verifyToken,
 } from "../lib/authStore.js";
+import { shouldSkipEmailVerification } from "../lib/appConfig.js";
 import { sendVerificationEmail } from "../lib/emailService.js";
 import type { AuthUser } from "../lib/types.js";
 
@@ -42,14 +43,7 @@ async function dispatchVerificationEmail(
   displayName: string,
   verificationToken: string,
 ): Promise<void> {
-  try {
-    await sendVerificationEmail(email, displayName, verificationToken);
-  } catch (err) {
-    console.error("[auth] Failed to send verification email:", err);
-    throw new Error(
-      "Compte créé mais l'email de vérification n'a pas pu être envoyé. Réessayez « Renvoyer l'email ».",
-    );
-  }
+  await sendVerificationEmail(email, displayName, verificationToken);
 }
 
 export async function authRoutes(app: FastifyInstance) {
@@ -77,12 +71,28 @@ export async function authRoutes(app: FastifyInstance) {
       const email = request.body?.email ?? "";
       const password = request.body?.password ?? "";
       const displayName = request.body?.displayName ?? "";
-      const { user, verificationToken } = signupUser(email, password, displayName);
+      const skipVerify = await shouldSkipEmailVerification();
+      const { user, verificationToken } = signupUser(email, password, displayName, {
+        skipEmailVerification: skipVerify,
+      });
+
+      if (skipVerify) {
+        const token = await createToken(user);
+        return reply.status(201).send({
+          user,
+          token,
+          pendingVerification: false,
+          message: "Compte créé — connexion automatique (vérification email désactivée).",
+        });
+      }
+
       try {
         await dispatchVerificationEmail(user.email, user.displayName, verificationToken);
         return reply.status(201).send({
           pendingVerification: true,
           email: user.email,
+          userId: user.id,
+          displayName: user.displayName,
           message:
             "Un email de vérification a été envoyé. Consultez votre boîte mail pour activer votre compte.",
         });
@@ -91,6 +101,8 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(201).send({
           pendingVerification: true,
           email: user.email,
+          userId: user.id,
+          displayName: user.displayName,
           emailDeliveryFailed: true,
           message:
             "Compte créé, mais l'email de vérification n'a pas pu être envoyé. Cliquez sur « Renvoyer l'email » ci-dessous.",
@@ -131,18 +143,28 @@ export async function authRoutes(app: FastifyInstance) {
               "Si un compte non vérifié existe pour cet email, un message a été envoyé.",
           });
         }
-        await dispatchVerificationEmail(
-          result.user.email,
-          result.user.displayName,
-          result.verificationToken,
-        );
-        return {
-          ok: true,
-          message: "Email de vérification renvoyé.",
-        };
+        try {
+          await dispatchVerificationEmail(
+            result.user.email,
+            result.user.displayName,
+            result.verificationToken,
+          );
+          return {
+            ok: true,
+            message: "Email de vérification renvoyé.",
+          };
+        } catch (emailErr) {
+          console.error("[auth] resend verification email failed:", emailErr);
+          return reply.status(200).send({
+            ok: false,
+            emailDeliveryFailed: true,
+            message:
+              "L'email n'a pas pu être envoyé (Resend). Réessayez plus tard ou demandez à l'admin d'activer l'inscription sans vérification email.",
+          });
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Resend failed";
-        return reply.status(500).send({ error: message });
+        return reply.status(400).send({ error: message });
       }
     },
   );
