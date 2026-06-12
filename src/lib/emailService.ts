@@ -68,6 +68,7 @@ export async function sendVerificationEmail(
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    console.error("[email] Resend API error:", res.status, body);
     throw new Error(`Envoi email échoué (${res.status}): ${body.slice(0, 200)}`);
   }
 }

@@ -78,13 +78,24 @@ export async function authRoutes(app: FastifyInstance) {
       const password = request.body?.password ?? "";
       const displayName = request.body?.displayName ?? "";
       const { user, verificationToken } = signupUser(email, password, displayName);
-      await dispatchVerificationEmail(user.email, user.displayName, verificationToken);
-      return reply.status(201).send({
-        pendingVerification: true,
-        email: user.email,
-        message:
-          "Un email de vérification a été envoyé. Consultez votre boîte mail pour activer votre compte.",
-      });
+      try {
+        await dispatchVerificationEmail(user.email, user.displayName, verificationToken);
+        return reply.status(201).send({
+          pendingVerification: true,
+          email: user.email,
+          message:
+            "Un email de vérification a été envoyé. Consultez votre boîte mail pour activer votre compte.",
+        });
+      } catch (emailErr) {
+        console.error("[auth] verification email failed after signup:", emailErr);
+        return reply.status(201).send({
+          pendingVerification: true,
+          email: user.email,
+          emailDeliveryFailed: true,
+          message:
+            "Compte créé, mais l'email de vérification n'a pas pu être envoyé. Cliquez sur « Renvoyer l'email » ci-dessous.",
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Signup failed";
       const status = message.includes("déjà") ? 409 : 400;
