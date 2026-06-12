@@ -7,17 +7,21 @@ const JWT_SECRET = new TextEncoder().encode(
 );
 
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
 interface StoredUser extends AuthUser {
   password: string;
   emailVerified: boolean;
   verificationToken?: string;
   verificationExpiresAt?: number;
+  passwordResetToken?: string;
+  passwordResetExpiresAt?: number;
 }
 
 const usersByEmail = new Map<string, StoredUser>();
 const usersById = new Map<string, StoredUser>();
 const usersByVerificationToken = new Map<string, StoredUser>();
+const usersByPasswordResetToken = new Map<string, StoredUser>();
 
 function registerUser(user: StoredUser): void {
   usersByEmail.set(user.email, user);
@@ -35,6 +39,18 @@ function clearVerificationToken(user: StoredUser): void {
   }
 }
 
+function clearPasswordResetToken(user: StoredUser): void {
+  if (user.passwordResetToken) {
+    usersByPasswordResetToken.delete(user.passwordResetToken);
+    user.passwordResetToken = undefined;
+    user.passwordResetExpiresAt = undefined;
+  }
+}
+
+function createSecureToken(): string {
+  return randomBytes(32).toString("hex");
+}
+
 function toAuthUser(user: StoredUser): AuthUser {
   return {
     id: user.id,
@@ -45,7 +61,7 @@ function toAuthUser(user: StoredUser): AuthUser {
 }
 
 function createVerificationToken(): string {
-  return randomBytes(32).toString("hex");
+  return createSecureToken();
 }
 
 function seedDemoUser(user: StoredUser): void {
@@ -191,6 +207,56 @@ export function resendVerificationForEmail(email: string): SignupResult | null {
   usersByVerificationToken.set(user.verificationToken, user);
 
   return { user: toAuthUser(user), verificationToken: user.verificationToken };
+}
+
+export interface PasswordResetRequest {
+  email: string;
+  displayName: string;
+  passwordResetToken: string;
+}
+
+export function requestPasswordResetForEmail(
+  email: string,
+): PasswordResetRequest | null {
+  const user = usersByEmail.get(email.trim().toLowerCase());
+  if (!user) return null;
+
+  clearPasswordResetToken(user);
+  user.passwordResetToken = createSecureToken();
+  user.passwordResetExpiresAt = Date.now() + PASSWORD_RESET_TTL_MS;
+  usersByPasswordResetToken.set(user.passwordResetToken, user);
+
+  return {
+    email: user.email,
+    displayName: user.displayName,
+    passwordResetToken: user.passwordResetToken,
+  };
+}
+
+export function resetPasswordByToken(token: string, newPassword: string): AuthUser {
+  const trimmed = token.trim();
+  if (!trimmed) {
+    throw new Error("Lien de réinitialisation invalide");
+  }
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error("Le mot de passe doit contenir au moins 6 caractères");
+  }
+
+  const user = usersByPasswordResetToken.get(trimmed);
+  if (!user) {
+    throw new Error("Lien de réinitialisation invalide ou déjà utilisé");
+  }
+  if (
+    user.passwordResetExpiresAt != null &&
+    Date.now() > user.passwordResetExpiresAt
+  ) {
+    clearPasswordResetToken(user);
+    throw new Error("Ce lien a expiré. Demandez un nouvel email de réinitialisation.");
+  }
+
+  user.password = newPassword;
+  clearPasswordResetToken(user);
+  return toAuthUser(user);
 }
 
 export function getUserById(userId: string): AuthUser | null {

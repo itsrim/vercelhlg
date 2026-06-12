@@ -2,13 +2,15 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   createToken,
   loginUser,
+  requestPasswordResetForEmail,
+  resetPasswordByToken,
   resendVerificationForEmail,
   signupUser,
   verifyEmailByToken,
   verifyToken,
 } from "../lib/authStore.js";
 import { shouldSkipEmailVerification } from "../lib/appConfig.js";
-import { sendVerificationEmail } from "../lib/emailService.js";
+import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/emailService.js";
 import type { AuthUser } from "../lib/types.js";
 
 declare module "fastify" {
@@ -159,11 +161,67 @@ export async function authRoutes(app: FastifyInstance) {
             ok: false,
             emailDeliveryFailed: true,
             message:
-              "L'email n'a pas pu être envoyé (Resend). Réessayez plus tard ou demandez à l'admin d'activer l'inscription sans vérification email.",
+              "L'email n'a pas pu être envoyé (Mailjet). Réessayez plus tard ou demandez à l'admin d'activer l'inscription sans vérification email.",
           });
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Resend failed";
+        const message = err instanceof Error ? err.message : "Envoi email impossible";
+        return reply.status(400).send({ error: message });
+      }
+    },
+  );
+
+  const FORGOT_PASSWORD_MESSAGE =
+    "Si un compte existe pour cet email, un lien de réinitialisation a été envoyé.";
+
+  app.post<{ Body: { email?: string } }>(
+    "/api/auth/forgot-password",
+    async (request, reply) => {
+      const email = request.body?.email?.trim() ?? "";
+      if (!email) {
+        return reply.status(400).send({ error: "Email requis" });
+      }
+
+      const result = requestPasswordResetForEmail(email);
+      if (!result) {
+        return { ok: true, message: FORGOT_PASSWORD_MESSAGE };
+      }
+
+      try {
+        await sendPasswordResetEmail(
+          result.email,
+          result.displayName,
+          result.passwordResetToken,
+        );
+        return { ok: true, message: FORGOT_PASSWORD_MESSAGE };
+      } catch (emailErr) {
+        console.error("[auth] password reset email failed:", emailErr);
+        return reply.status(200).send({
+          ok: false,
+          emailDeliveryFailed: true,
+          message:
+            "L'email n'a pas pu être envoyé. Réessayez plus tard ou contactez le support.",
+        });
+      }
+    },
+  );
+
+  app.post<{ Body: { token?: string; password?: string } }>(
+    "/api/auth/reset-password",
+    async (request, reply) => {
+      try {
+        const token = request.body?.token ?? "";
+        const password = request.body?.password ?? "";
+        const user = resetPasswordByToken(token, password);
+        const jwt = await createToken(user);
+        return {
+          ok: true,
+          user,
+          token: jwt,
+          message: "Mot de passe mis à jour — vous êtes connecté.",
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Réinitialisation échouée";
         return reply.status(400).send({ error: message });
       }
     },

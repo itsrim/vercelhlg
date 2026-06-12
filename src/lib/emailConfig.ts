@@ -1,9 +1,15 @@
-export function resendApiKey(): string {
-  return process.env.RESEND_API_KEY?.trim() ?? "";
+export function mailjetApiKey(): string {
+  return process.env.MAILJET_API_KEY?.trim() ?? "";
+}
+
+export function mailjetApiSecret(): string {
+  return process.env.MAILJET_API_SECRET?.trim() ?? "";
 }
 
 export function emailFrom(): string {
-  return process.env.EMAIL_FROM?.trim() || "Nel <onboarding@resend.dev>";
+  return (
+    process.env.EMAIL_FROM?.trim() || "Happy Let's GO <noreply@happyletsgo.fr>"
+  );
 }
 
 /** URL du frontend (sans slash final) — lien « Vérifier mon email ». */
@@ -16,5 +22,24 @@ export function appPublicUrl(): string {
 }
 
 export function isEmailConfigured(): boolean {
-  return resendApiKey().length > 0;
+  return mailjetApiKey().length > 0 && mailjetApiSecret().length > 0;
+}
+
+export function mailjetAuthHeader(): string {
+  const token = Buffer.from(`${mailjetApiKey()}:${mailjetApiSecret()}`).toString(
+    "base64",
+  );
+  return `Basic ${token}`;
+}
+
+export function parseEmailFrom(raw: string): { email: string; name: string } {
+  const trimmed = raw.trim();
+  const match = trimmed.match(/^(.+?)\s*<([^>]+)>$/);
+  if (match) {
+    return {
+      name: match[1].trim().replace(/^"|"$/g, ""),
+      email: match[2].trim(),
+    };
+  }
+  return { name: "Happy Let's GO", email: trimmed };
 }

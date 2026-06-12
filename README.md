@@ -104,8 +104,9 @@ Créer un fichier `.env` à la racine de `backend/` (non versionné) ou les déf
 | `VAPID_PUBLIC_KEY` | — | Web Push (public) |
 | `VAPID_PRIVATE_KEY` | — | Web Push (privé) |
 | `VAPID_SUBJECT` | `mailto:hello@hlg.app` | Contact VAPID |
-| `RESEND_API_KEY` | — | Clé API [Resend](https://resend.com) pour emails de vérification |
-| `EMAIL_FROM` | `Nel <onboarding@resend.dev>` | Expéditeur (domaine vérifié en prod) |
+| `MAILJET_API_KEY` | — | Clé API [Mailjet](https://www.mailjet.com) |
+| `MAILJET_API_SECRET` | — | Secret API Mailjet |
+| `EMAIL_FROM` | `Happy Let's GO <noreply@happyletsgo.fr>` | Expéditeur (domaine validé dans Mailjet) |
 | `APP_PUBLIC_URL` | `https://happyletsgo.fr` (prod) / `http://localhost:5173` (dev) | URL frontend pour le lien « Vérifier mon email » |
 
 Origines CORS autorisées par défaut :
@@ -337,7 +338,7 @@ Voir **`backend/render.yaml`** et les étapes détaillées ci-dessous.
 
 ### Variables Render (Environment)
 
-`JWT_SECRET`, `APP_PUBLIC_URL=https://happyletsgo.fr`, `ALLOWED_ORIGINS`, `RESEND_API_KEY`, `EMAIL_FROM`
+`JWT_SECRET`, `APP_PUBLIC_URL=https://happyletsgo.fr`, `ALLOWED_ORIGINS`, `MAILJET_API_KEY`, `MAILJET_API_SECRET`, `EMAIL_FROM`
 
 ### Frontend
 

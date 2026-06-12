@@ -2,7 +2,7 @@
 # Dashboard : New → Blueprint → connecter le repo, ou créer un Web Service manuellement.
 #
 # Secrets à ajouter dans le dashboard Render (Environment) :
-#   RESEND_API_KEY, EMAIL_FROM, JWT_SECRET (ou laisser generateValue)
+#   MAILJET_API_KEY, MAILJET_API_SECRET, EMAIL_FROM, JWT_SECRET (ou laisser generateValue)
 
 services:
   - type: web
