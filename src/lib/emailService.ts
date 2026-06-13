@@ -229,7 +229,11 @@ export async function sendVerificationEmail(
   displayName: string,
   token: string,
 ): Promise<void> {
-  const verifyUrl = buildVerificationUrl(token);
+  const trimmed = token.trim();
+  if (!trimmed) {
+    throw new Error("Token de vérification vide");
+  }
+  const verifyUrl = buildVerificationUrl(trimmed);
 
   if (!isEmailConfigured()) {
     console.warn("[email] Aucun transport configuré — email de vérification non envoyé");
@@ -251,7 +255,11 @@ export async function sendPasswordResetEmail(
   displayName: string,
   token: string,
 ): Promise<void> {
-  const resetUrl = buildPasswordResetUrl(token);
+  const trimmed = token.trim();
+  if (!trimmed) {
+    throw new Error("Token de réinitialisation vide");
+  }
+  const resetUrl = buildPasswordResetUrl(trimmed);
 
   if (!isEmailConfigured()) {
     console.warn("[email] Aucun transport configuré — email de réinitialisation non envoyé");

@@ -43,7 +43,11 @@ async function dispatchVerificationEmail(
   displayName: string,
   verificationToken: string,
 ): Promise<void> {
-  await sendVerificationEmail(email, displayName, verificationToken);
+  const token = verificationToken.trim();
+  if (!token) {
+    throw new Error("Token de vérification manquant côté serveur");
+  }
+  await sendVerificationEmail(email, displayName, token);
 }
 
 export async function authRoutes(app: FastifyInstance) {
@@ -78,13 +82,16 @@ export async function authRoutes(app: FastifyInstance) {
       userId?: string;
       verificationToken?: string;
       verificationExpiresAt?: number | null;
+      skipEmailVerification?: boolean;
     };
   }>("/api/auth/signup", async (request, reply) => {
     try {
       const email = request.body?.email ?? "";
       const password = request.body?.password ?? "";
       const displayName = request.body?.displayName ?? "";
-      const skipVerify = await shouldSkipEmailVerification();
+      const skipVerify =
+        (await shouldSkipEmailVerification()) ||
+        request.body?.skipEmailVerification === true;
       const { user, verificationToken, sheetAuth } = signupUser(
         email,
         password,
@@ -191,7 +198,14 @@ export async function authRoutes(app: FastifyInstance) {
   const FORGOT_PASSWORD_MESSAGE =
     "Si un compte existe pour cet email, un lien de réinitialisation a été envoyé.";
 
-  app.post<{ Body: { email?: string; displayName?: string } }>(
+  app.post<{
+    Body: {
+      email?: string;
+      displayName?: string;
+      passwordResetToken?: string;
+      passwordResetExpiresAt?: number | null;
+    };
+  }>(
     "/api/auth/forgot-password",
     async (request, reply) => {
       const email = request.body?.email?.trim() ?? "";
@@ -200,13 +214,21 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Email requis" });
       }
 
-      const result = requestPasswordResetForEmail(email, displayName);
+      const result = requestPasswordResetForEmail(email, displayName, {
+        passwordResetToken: request.body?.passwordResetToken,
+        passwordResetExpiresAt: request.body?.passwordResetExpiresAt,
+      });
+
+      const resetToken = result.passwordResetToken.trim();
+      if (!resetToken) {
+        return reply.status(500).send({ error: "Token de réinitialisation manquant" });
+      }
 
       try {
         await sendPasswordResetEmail(
           result.email,
           result.displayName,
-          result.passwordResetToken,
+          resetToken,
         );
         return {
           ok: true,

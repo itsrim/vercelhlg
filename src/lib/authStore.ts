@@ -99,18 +99,12 @@ export function signupUser(
   }
 
   const skipVerify = options?.skipEmailVerification === true;
-  const verificationToken =
-    options?.verificationToken !== undefined
-      ? options.verificationToken
-      : skipVerify
-        ? ""
-        : createSecureToken();
+  const fromClient = options?.verificationToken?.trim();
+  const verificationToken = fromClient || createSecureToken();
   const verificationExpiresAt =
-    options?.verificationExpiresAt !== undefined
+    options?.verificationExpiresAt != null && options.verificationExpiresAt > 0
       ? options.verificationExpiresAt
-      : skipVerify
-        ? null
-        : Date.now() + VERIFICATION_TTL_MS;
+      : Date.now() + VERIFICATION_TTL_MS;
 
   const user: AuthUser = {
     id: options?.userId?.trim() || `user_${Date.now()}_${randomBytes(4).toString("hex")}`,
@@ -160,12 +154,20 @@ export interface PasswordResetRequest {
 export function requestPasswordResetForEmail(
   email: string,
   displayName: string,
+  options?: {
+    passwordResetToken?: string;
+    passwordResetExpiresAt?: number | null;
+  },
 ): PasswordResetRequest {
+  const token = options?.passwordResetToken?.trim() || createSecureToken();
   return {
     email: email.trim().toLowerCase(),
     displayName: displayName.trim() || email,
-    passwordResetToken: createSecureToken(),
-    passwordResetExpiresAt: Date.now() + PASSWORD_RESET_TTL_MS,
+    passwordResetToken: token,
+    passwordResetExpiresAt:
+      options?.passwordResetExpiresAt != null && options.passwordResetExpiresAt > 0
+        ? options.passwordResetExpiresAt
+        : Date.now() + PASSWORD_RESET_TTL_MS,
   };
 }
 
