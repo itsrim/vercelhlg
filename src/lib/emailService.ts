@@ -2,8 +2,10 @@ import nodemailer from "nodemailer";
 import type Mail from "nodemailer/lib/mailer/index.js";
 import {
   appPublicUrl,
+  brevoApiKey,
   emailFrom,
   emailTransportLabel,
+  isBrevoApiConfigured,
   isEmailConfigured,
   isMailjetConfigured,
   isSmtpConfigured,
@@ -28,6 +30,9 @@ function getSmtpTransporter(): nodemailer.Transporter {
         user: smtpUser(),
         pass: smtpPass(),
       },
+      connectionTimeout: 15_000,
+      greetingTimeout: 15_000,
+      socketTimeout: 20_000,
     });
   }
   return smtpTransporter;
@@ -105,6 +110,36 @@ async function sendViaSmtp(message: Mail.Options): Promise<void> {
   await transporter.sendMail(message);
 }
 
+/** Brevo via HTTPS (port 443) — requis sur Render free (SMTP 587 bloqué). */
+async function sendViaBrevoApi(
+  to: string,
+  displayName: string,
+  subject: string,
+  html: string,
+): Promise<void> {
+  const from = parseEmailFrom(emailFrom());
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": brevoApiKey(),
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      sender: { name: from.name, email: from.email },
+      to: [{ email: to, name: displayName.trim() || to }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error("[email] Brevo API error:", res.status, body);
+    throw new Error(`Envoi email échoué (${res.status}): ${body.slice(0, 200)}`);
+  }
+}
+
 async function sendViaMailjetHtml(
   to: string,
   displayName: string,
@@ -159,6 +194,11 @@ async function sendHtmlEmail(
   }
 
   const from = parseEmailFrom(emailFrom());
+
+  if (isBrevoApiConfigured()) {
+    await sendViaBrevoApi(to, displayName, subject, html);
+    return;
+  }
 
   if (isSmtpConfigured()) {
     try {

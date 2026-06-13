@@ -2,7 +2,8 @@
 # Dashboard : New → Blueprint → connecter le repo, ou créer un Web Service manuellement.
 #
 # Secrets à ajouter dans le dashboard Render (Environment) :
-#   SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_FROM, JWT_SECRET (ou laisser generateValue)
+#   BREVO_API_KEY, EMAIL_FROM, JWT_SECRET (ou laisser generateValue)
+#   Note: Render free bloque SMTP 587 — utiliser Brevo API HTTPS, pas SMTP_*
 #   Optionnel : SKIP_EMAIL_VERIFICATION=true si pas d'email configuré
 
 services:

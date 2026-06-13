@@ -38,6 +38,15 @@ export function smtpPass(): string {
   return process.env.SMTP_PASS?.trim() ?? "";
 }
 
+/** Clé API Brevo v3 (`xkeysib-…`) — HTTPS, fonctionne sur Render free tier. */
+export function brevoApiKey(): string {
+  return (
+    process.env.BREVO_API_KEY?.trim() ??
+    process.env.APIKEY_BREVO?.trim() ??
+    ""
+  );
+}
+
 /** Mailjet (legacy) — conservé si déjà configuré. */
 export function mailjetApiKey(): string {
   return process.env.MAILJET_API_KEY?.trim() ?? "";
@@ -45,6 +54,10 @@ export function mailjetApiKey(): string {
 
 export function mailjetApiSecret(): string {
   return process.env.MAILJET_API_SECRET?.trim() ?? "";
+}
+
+export function isBrevoApiConfigured(): boolean {
+  return brevoApiKey().length > 0;
 }
 
 export function isSmtpConfigured(): boolean {
@@ -56,13 +69,14 @@ export function isMailjetConfigured(): boolean {
 }
 
 export function isEmailConfigured(): boolean {
-  return isSmtpConfigured() || isMailjetConfigured();
+  return isBrevoApiConfigured() || isSmtpConfigured() || isMailjetConfigured();
 }
 
 export function emailTransportLabel(): string {
+  if (isBrevoApiConfigured()) return "Brevo API (HTTPS)";
   if (isSmtpConfigured()) return `SMTP (${smtpHost()})`;
   if (isMailjetConfigured()) return "Mailjet API";
-  return "none";
+  return "not-configured";
 }
 
 export function mailjetAuthHeader(): string {
