@@ -1,8 +1,9 @@
-# Blueprint Render — déploiement du backend Nel / Happy Let's GO
+# Blueprint Render — déploiement du backend Hlg / Happy Let's GO
 # Dashboard : New → Blueprint → connecter le repo, ou créer un Web Service manuellement.
 #
 # Secrets à ajouter dans le dashboard Render (Environment) :
-#   MAILJET_API_KEY, MAILJET_API_SECRET, EMAIL_FROM, JWT_SECRET (ou laisser generateValue)
+#   SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_FROM, JWT_SECRET (ou laisser generateValue)
+#   Optionnel : SKIP_EMAIL_VERIFICATION=true si pas d'email configuré
 
 services:
   - type: web

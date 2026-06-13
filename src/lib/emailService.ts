@@ -1,10 +1,37 @@
+import nodemailer from "nodemailer";
+import type Mail from "nodemailer/lib/mailer/index.js";
 import {
   appPublicUrl,
   emailFrom,
+  emailTransportLabel,
   isEmailConfigured,
+  isMailjetConfigured,
+  isSmtpConfigured,
   mailjetAuthHeader,
   parseEmailFrom,
+  smtpHost,
+  smtpPass,
+  smtpPort,
+  smtpSecure,
+  smtpUser,
 } from "./emailConfig.js";
+
+let smtpTransporter: nodemailer.Transporter | null = null;
+
+function getSmtpTransporter(): nodemailer.Transporter {
+  if (!smtpTransporter) {
+    smtpTransporter = nodemailer.createTransport({
+      host: smtpHost(),
+      port: smtpPort(),
+      secure: smtpSecure(),
+      auth: {
+        user: smtpUser(),
+        pass: smtpPass(),
+      },
+    });
+  }
+  return smtpTransporter;
+}
 
 function buildVerificationHtml(displayName: string, verifyUrl: string): string {
   const name = displayName.trim() || "there";
@@ -73,16 +100,17 @@ function buildPasswordResetHtml(displayName: string, resetUrl: string): string {
   `;
 }
 
-async function sendMailjetHtml(
+async function sendViaSmtp(message: Mail.Options): Promise<void> {
+  const transporter = getSmtpTransporter();
+  await transporter.sendMail(message);
+}
+
+async function sendViaMailjetHtml(
   to: string,
   displayName: string,
   subject: string,
   html: string,
 ): Promise<void> {
-  if (!isEmailConfigured()) {
-    throw new Error("Service email non configuré");
-  }
-
   const from = parseEmailFrom(emailFrom());
   const res = await fetch("https://api.mailjet.com/v3.1/send", {
     method: "POST",
@@ -120,6 +148,42 @@ async function sendMailjetHtml(
   }
 }
 
+async function sendHtmlEmail(
+  to: string,
+  displayName: string,
+  subject: string,
+  html: string,
+): Promise<void> {
+  if (!isEmailConfigured()) {
+    throw new Error("Service email non configuré");
+  }
+
+  const from = parseEmailFrom(emailFrom());
+
+  if (isSmtpConfigured()) {
+    try {
+      await sendViaSmtp({
+        from: { name: from.name, address: from.email },
+        to: { name: displayName.trim() || to, address: to },
+        subject,
+        html,
+      });
+      return;
+    } catch (err) {
+      console.error("[email] SMTP send failed:", err);
+      if (!isMailjetConfigured()) throw err;
+      console.warn("[email] Fallback Mailjet après échec SMTP");
+    }
+  }
+
+  if (isMailjetConfigured()) {
+    await sendViaMailjetHtml(to, displayName, subject, html);
+    return;
+  }
+
+  throw new Error("Service email non configuré");
+}
+
 export async function sendVerificationEmail(
   to: string,
   displayName: string,
@@ -128,12 +192,13 @@ export async function sendVerificationEmail(
   const verifyUrl = buildVerificationUrl(token);
 
   if (!isEmailConfigured()) {
-    console.warn("[email] Mailjet absent — email de vérification non envoyé");
+    console.warn("[email] Aucun transport configuré — email de vérification non envoyé");
+    console.warn(`[email] Transport: ${emailTransportLabel()}`);
     console.warn(`[email] Lien de vérification (dev): ${verifyUrl}`);
     return;
   }
 
-  await sendMailjetHtml(
+  await sendHtmlEmail(
     to,
     displayName,
     "Confirmation email — Happy let's GO !",
@@ -149,12 +214,12 @@ export async function sendPasswordResetEmail(
   const resetUrl = buildPasswordResetUrl(token);
 
   if (!isEmailConfigured()) {
-    console.warn("[email] Mailjet absent — email de réinitialisation non envoyé");
+    console.warn("[email] Aucun transport configuré — email de réinitialisation non envoyé");
     console.warn(`[email] Lien de réinitialisation (dev): ${resetUrl}`);
     return;
   }
 
-  await sendMailjetHtml(
+  await sendHtmlEmail(
     to,
     displayName,
     "Réinitialisation du mot de passe — Happy let's GO",

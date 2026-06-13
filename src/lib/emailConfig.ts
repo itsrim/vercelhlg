@@ -1,11 +1,3 @@
-export function mailjetApiKey(): string {
-  return process.env.MAILJET_API_KEY?.trim() ?? "";
-}
-
-export function mailjetApiSecret(): string {
-  return process.env.MAILJET_API_SECRET?.trim() ?? "";
-}
-
 export function emailFrom(): string {
   return (
     process.env.EMAIL_FROM?.trim() || "Happy Let's GO <noreply@happyletsgo.fr>"
@@ -21,8 +13,56 @@ export function appPublicUrl(): string {
   return raw.replace(/\/+$/, "");
 }
 
-export function isEmailConfigured(): boolean {
+export function smtpHost(): string {
+  return process.env.SMTP_HOST?.trim() ?? "";
+}
+
+export function smtpPort(): number {
+  const raw = process.env.SMTP_PORT?.trim();
+  const n = raw ? parseInt(raw, 10) : 587;
+  return Number.isFinite(n) ? n : 587;
+}
+
+export function smtpSecure(): boolean {
+  const raw = process.env.SMTP_SECURE?.trim().toLowerCase();
+  if (raw === "true" || raw === "1") return true;
+  if (raw === "false" || raw === "0") return false;
+  return smtpPort() === 465;
+}
+
+export function smtpUser(): string {
+  return process.env.SMTP_USER?.trim() ?? "";
+}
+
+export function smtpPass(): string {
+  return process.env.SMTP_PASS?.trim() ?? "";
+}
+
+/** Mailjet (legacy) — conservé si déjà configuré. */
+export function mailjetApiKey(): string {
+  return process.env.MAILJET_API_KEY?.trim() ?? "";
+}
+
+export function mailjetApiSecret(): string {
+  return process.env.MAILJET_API_SECRET?.trim() ?? "";
+}
+
+export function isSmtpConfigured(): boolean {
+  return smtpHost().length > 0 && smtpUser().length > 0 && smtpPass().length > 0;
+}
+
+export function isMailjetConfigured(): boolean {
   return mailjetApiKey().length > 0 && mailjetApiSecret().length > 0;
+}
+
+export function isEmailConfigured(): boolean {
+  return isSmtpConfigured() || isMailjetConfigured();
+}
+
+export function emailTransportLabel(): string {
+  if (isSmtpConfigured()) return `SMTP (${smtpHost()})`;
+  if (isMailjetConfigured()) return "Mailjet API";
+  return "none";
 }
 
 export function mailjetAuthHeader(): string {

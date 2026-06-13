@@ -53,4 +53,4 @@ registerChatSocket(io);
 const listenPort = port();
 await app.listen({ port: listenPort, host: "0.0.0.0" });
 
-app.log.info(`Nel chat API listening on http://0.0.0.0:${listenPort}`);
+app.log.info(`Hlg chat API listening on http://0.0.0.0:${listenPort}`);

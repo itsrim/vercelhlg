@@ -178,7 +178,7 @@ export async function authRoutes(app: FastifyInstance) {
             ok: false,
             emailDeliveryFailed: true,
             message:
-              "L'email n'a pas pu être envoyé (Mailjet). Réessayez plus tard ou demandez à l'admin d'activer l'inscription sans vérification email.",
+              "L'email n'a pas pu être envoyé. Réessayez plus tard ou demandez à l'admin d'activer l'inscription sans vérification email.",
           });
         }
       } catch (err) {
