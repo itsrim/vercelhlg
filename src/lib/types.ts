@@ -11,6 +11,8 @@ export interface PostMessageBody {
   id?: string;
   text: string;
   sentAt?: number;
+  /** Destinataires (profilId / userId) — garantit la livraison socket instantanée. */
+  recipientUserIds?: string[];
 }
 
 export interface AuthUser {

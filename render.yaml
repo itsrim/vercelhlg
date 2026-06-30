@@ -10,7 +10,6 @@ services:
   - type: web
     name: hlg-api
     runtime: node
-    rootDir: backend
     plan: free
     buildCommand: npm install && npm run build
     startCommand: npm start
