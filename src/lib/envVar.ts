@@ -1,4 +1,4 @@
-/** Lit une variable d'env — accepte le préfixe VITE_ (même noms que le frontend). */
+/** Lit une variable d’env — accepte le préfixe VITE_ (même noms que le frontend). */
 export function envVar(...keys: string[]): string {
   for (const key of keys) {
     const direct = process.env[key]?.trim();

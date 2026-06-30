@@ -18,7 +18,7 @@ export async function pushRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Invalid push subscription" });
       }
 
-      const subscription = addPushSubscription(request.authUser.id, body);
+      const subscription = await addPushSubscription(request.authUser.id, body);
       return reply.status(201).send({ ok: true, subscriptionId: subscription.id });
     },
   );
@@ -29,7 +29,7 @@ export async function pushRoutes(app: FastifyInstance) {
       await requireAuth(request, reply);
       if (reply.sent || !request.authUser) return;
 
-      removePushSubscription(request.authUser.id, request.body?.endpoint);
+      await removePushSubscription(request.authUser.id, request.body?.endpoint);
       return { ok: true };
     },
   );

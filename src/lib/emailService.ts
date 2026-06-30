@@ -1,42 +1,10 @@
-import nodemailer from "nodemailer";
-import type Mail from "nodemailer/lib/mailer/index.js";
 import {
   appPublicUrl,
-  brevoApiKey,
   emailFrom,
-  emailTransportLabel,
-  isBrevoApiConfigured,
   isEmailConfigured,
-  isMailjetConfigured,
-  isSmtpConfigured,
   mailjetAuthHeader,
   parseEmailFrom,
-  smtpHost,
-  smtpPass,
-  smtpPort,
-  smtpSecure,
-  smtpUser,
 } from "./emailConfig.js";
-
-let smtpTransporter: nodemailer.Transporter | null = null;
-
-function getSmtpTransporter(): nodemailer.Transporter {
-  if (!smtpTransporter) {
-    smtpTransporter = nodemailer.createTransport({
-      host: smtpHost(),
-      port: smtpPort(),
-      secure: smtpSecure(),
-      auth: {
-        user: smtpUser(),
-        pass: smtpPass(),
-      },
-      connectionTimeout: 15_000,
-      greetingTimeout: 15_000,
-      socketTimeout: 20_000,
-    });
-  }
-  return smtpTransporter;
-}
 
 function buildVerificationHtml(displayName: string, verifyUrl: string): string {
   const name = displayName.trim() || "there";
@@ -105,47 +73,16 @@ function buildPasswordResetHtml(displayName: string, resetUrl: string): string {
   `;
 }
 
-async function sendViaSmtp(message: Mail.Options): Promise<void> {
-  const transporter = getSmtpTransporter();
-  await transporter.sendMail(message);
-}
-
-/** Brevo via HTTPS (port 443) — requis sur Render free (SMTP 587 bloqué). */
-async function sendViaBrevoApi(
+async function sendMailjetHtml(
   to: string,
   displayName: string,
   subject: string,
   html: string,
 ): Promise<void> {
-  const from = parseEmailFrom(emailFrom());
-  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: {
-      "api-key": brevoApiKey(),
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
-      sender: { name: from.name, email: from.email },
-      to: [{ email: to, name: displayName.trim() || to }],
-      subject,
-      htmlContent: html,
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    console.error("[email] Brevo API error:", res.status, body);
-    throw new Error(`Envoi email échoué (${res.status}): ${body.slice(0, 200)}`);
+  if (!isEmailConfigured()) {
+    throw new Error("Service email non configuré");
   }
-}
 
-async function sendViaMailjetHtml(
-  to: string,
-  displayName: string,
-  subject: string,
-  html: string,
-): Promise<void> {
   const from = parseEmailFrom(emailFrom());
   const res = await fetch("https://api.mailjet.com/v3.1/send", {
     method: "POST",
@@ -183,66 +120,20 @@ async function sendViaMailjetHtml(
   }
 }
 
-async function sendHtmlEmail(
-  to: string,
-  displayName: string,
-  subject: string,
-  html: string,
-): Promise<void> {
-  if (!isEmailConfigured()) {
-    throw new Error("Service email non configuré");
-  }
-
-  const from = parseEmailFrom(emailFrom());
-
-  if (isBrevoApiConfigured()) {
-    await sendViaBrevoApi(to, displayName, subject, html);
-    return;
-  }
-
-  if (isSmtpConfigured()) {
-    try {
-      await sendViaSmtp({
-        from: { name: from.name, address: from.email },
-        to: { name: displayName.trim() || to, address: to },
-        subject,
-        html,
-      });
-      return;
-    } catch (err) {
-      console.error("[email] SMTP send failed:", err);
-      if (!isMailjetConfigured()) throw err;
-      console.warn("[email] Fallback Mailjet après échec SMTP");
-    }
-  }
-
-  if (isMailjetConfigured()) {
-    await sendViaMailjetHtml(to, displayName, subject, html);
-    return;
-  }
-
-  throw new Error("Service email non configuré");
-}
-
 export async function sendVerificationEmail(
   to: string,
   displayName: string,
   token: string,
 ): Promise<void> {
-  const trimmed = token.trim();
-  if (!trimmed) {
-    throw new Error("Token de vérification vide");
-  }
-  const verifyUrl = buildVerificationUrl(trimmed);
+  const verifyUrl = buildVerificationUrl(token);
 
   if (!isEmailConfigured()) {
-    console.warn("[email] Aucun transport configuré — email de vérification non envoyé");
-    console.warn(`[email] Transport: ${emailTransportLabel()}`);
+    console.warn("[email] Mailjet absent — email de vérification non envoyé");
     console.warn(`[email] Lien de vérification (dev): ${verifyUrl}`);
     return;
   }
 
-  await sendHtmlEmail(
+  await sendMailjetHtml(
     to,
     displayName,
     "Confirmation email — Happy let's GO !",
@@ -255,19 +146,15 @@ export async function sendPasswordResetEmail(
   displayName: string,
   token: string,
 ): Promise<void> {
-  const trimmed = token.trim();
-  if (!trimmed) {
-    throw new Error("Token de réinitialisation vide");
-  }
-  const resetUrl = buildPasswordResetUrl(trimmed);
+  const resetUrl = buildPasswordResetUrl(token);
 
   if (!isEmailConfigured()) {
-    console.warn("[email] Aucun transport configuré — email de réinitialisation non envoyé");
+    console.warn("[email] Mailjet absent — email de réinitialisation non envoyé");
     console.warn(`[email] Lien de réinitialisation (dev): ${resetUrl}`);
     return;
   }
 
-  await sendHtmlEmail(
+  await sendMailjetHtml(
     to,
     displayName,
     "Réinitialisation du mot de passe — Happy let's GO",
