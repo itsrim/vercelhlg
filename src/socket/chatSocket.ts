@@ -250,6 +250,25 @@ export function registerChatSocket(io: Server) {
       });
     });
 
+    socket.on(
+      "badge:seen",
+      (payload: {
+        key?: string;
+        lastSeenAt?: Record<string, number>;
+        updatedAt?: number;
+      }) => {
+        const key = payload?.key?.trim();
+        const updatedAt = payload?.updatedAt;
+        if (!key || typeof updatedAt !== "number") return;
+
+        socket.to(userRoom(user.id)).emit("badge:seen", {
+          key,
+          lastSeenAt: payload.lastSeenAt ?? {},
+          updatedAt,
+        });
+      },
+    );
+
     socket.on("message:send", async (payload: PostMessageBody & { conversationId?: string }) => {
       const conversationId = payload?.conversationId?.trim();
       if (!conversationId) {
