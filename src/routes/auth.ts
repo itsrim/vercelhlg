@@ -2,15 +2,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   createSessionFromUser,
   createToken,
-  markUserEmailVerified,
-  requestPasswordResetForEmailDispatch,
-  resetPasswordByToken,
-  resendVerificationForEmailDispatch,
-  signupUserForEmailDispatch,
-  validateLoginCredentials,
+  requestPasswordResetForEmail,
+  resendVerificationForEmail,
+  signupUser,
   verifyEmailByToken,
   verifyToken,
-  toAuthUser,
 } from "../lib/authStore.js";
 import { shouldSkipEmailVerification } from "../lib/appConfig.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/emailService.js";
@@ -79,37 +75,6 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post<{ Body: { email?: string; password?: string } }>(
-    "/api/auth/login",
-    async (request, reply) => {
-      try {
-        const email = request.body?.email ?? "";
-        const password = request.body?.password ?? "";
-        const stored = await validateLoginCredentials(email, password);
-
-        if (!stored.emailVerified) {
-          const skipVerify = await shouldSkipEmailVerification();
-          if (skipVerify) {
-            await markUserEmailVerified(stored.email);
-            stored.emailVerified = true;
-          } else {
-            throw new Error(
-              "Veuillez confirmer votre email avant de vous connecter. Consultez votre boîte mail ou renvoyez l'email de vérification.",
-            );
-          }
-        }
-
-        const user = toAuthUser(stored);
-        const token = await createToken(user);
-        return { user, token };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Login failed";
-        const status = message.includes("confirmer") ? 403 : 401;
-        return reply.status(status).send({ error: message });
-      }
-    },
-  );
-
   app.post<{
     Body: {
       email?: string;
@@ -128,7 +93,7 @@ export async function authRoutes(app: FastifyInstance) {
       const skipVerify =
         (await shouldSkipEmailVerification()) ||
         request.body?.skipEmailVerification === true;
-      const { user, verificationToken, sheetAuth } = signupUserForEmailDispatch(
+      const { user, verificationToken, sheetAuth } = signupUser(
         email,
         password,
         displayName,
@@ -181,6 +146,56 @@ export async function authRoutes(app: FastifyInstance) {
     }
   });
 
+  app.post<{
+    Body: {
+      email?: string;
+      displayName?: string;
+      verificationToken?: string;
+      verificationExpiresAt?: number | null;
+    };
+  }>(
+    "/api/auth/resend-verification",
+    async (request, reply) => {
+      try {
+        const email = request.body?.email?.trim() ?? "";
+        const displayName = request.body?.displayName?.trim() ?? email;
+        if (!email) {
+          return reply.status(400).send({ error: "Email requis" });
+        }
+
+        const { verificationToken, sheetAuth } = resendVerificationForEmail(
+          email,
+          displayName,
+          {
+            verificationToken: request.body?.verificationToken,
+            verificationExpiresAt: request.body?.verificationExpiresAt,
+          },
+        );
+
+        try {
+          await dispatchVerificationEmail(email, displayName, verificationToken);
+          return {
+            ok: true,
+            verificationToken,
+            verificationExpiresAt: sheetAuth.verificationExpiresAt,
+            message: "Email de vérification renvoyé.",
+          };
+        } catch (emailErr) {
+          console.error("[auth] resend verification email failed:", emailErr);
+          return reply.status(200).send({
+            ok: false,
+            emailDeliveryFailed: true,
+            message:
+              "L'email n'a pas pu être envoyé (Brevo). Réessayez plus tard ou demandez à l'admin d'activer l'inscription sans vérification email.",
+          });
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Envoi email impossible";
+        return reply.status(400).send({ error: message });
+      }
+    },
+  );
+
   app.get<{ Querystring: { token?: string } }>(
     "/api/auth/verify-email",
     async (request, reply) => {
@@ -196,53 +211,6 @@ export async function authRoutes(app: FastifyInstance) {
     },
   );
 
-  app.post<{
-    Body: {
-      email?: string;
-      displayName?: string;
-      verificationToken?: string;
-      verificationExpiresAt?: number | null;
-    };
-  }>("/api/auth/resend-verification", async (request, reply) => {
-    try {
-      const email = request.body?.email?.trim() ?? "";
-      const displayName = request.body?.displayName?.trim() ?? email;
-      if (!email) {
-        return reply.status(400).send({ error: "Email requis" });
-      }
-
-      const { verificationToken, sheetAuth } = resendVerificationForEmailDispatch(
-        email,
-        displayName,
-        {
-          verificationToken: request.body?.verificationToken,
-          verificationExpiresAt: request.body?.verificationExpiresAt,
-        },
-      );
-
-      try {
-        await dispatchVerificationEmail(email, displayName, verificationToken);
-        return {
-          ok: true,
-          verificationToken,
-          verificationExpiresAt: sheetAuth.verificationExpiresAt,
-          message: "Email de vérification renvoyé.",
-        };
-      } catch (emailErr) {
-        console.error("[auth] resend verification email failed:", emailErr);
-        return reply.status(200).send({
-          ok: false,
-          emailDeliveryFailed: true,
-          message:
-            "L'email n'a pas pu être envoyé (Brevo). Réessayez plus tard ou demandez à l'admin d'activer l'inscription sans vérification email.",
-        });
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Envoi email impossible";
-      return reply.status(400).send({ error: message });
-    }
-  });
-
   const FORGOT_PASSWORD_MESSAGE =
     "Si un compte existe pour cet email, un lien de réinitialisation a été envoyé.";
 
@@ -253,59 +221,45 @@ export async function authRoutes(app: FastifyInstance) {
       passwordResetToken?: string;
       passwordResetExpiresAt?: number | null;
     };
-  }>("/api/auth/forgot-password", async (request, reply) => {
-    const email = request.body?.email?.trim() ?? "";
-    const displayName = request.body?.displayName?.trim() ?? email;
-    if (!email) {
-      return reply.status(400).send({ error: "Email requis" });
-    }
-
-    const result = requestPasswordResetForEmailDispatch(email, displayName, {
-      passwordResetToken: request.body?.passwordResetToken,
-      passwordResetExpiresAt: request.body?.passwordResetExpiresAt,
-    });
-
-    const resetToken = result.passwordResetToken.trim();
-    if (!resetToken) {
-      return reply.status(500).send({ error: "Token de réinitialisation manquant" });
-    }
-
-    try {
-      await sendPasswordResetEmail(result.email, result.displayName, resetToken);
-      return {
-        ok: true,
-        message: FORGOT_PASSWORD_MESSAGE,
-        passwordResetToken: result.passwordResetToken,
-        passwordResetExpiresAt: result.passwordResetExpiresAt,
-      };
-    } catch (emailErr) {
-      console.error("[auth] password reset email failed:", emailErr);
-      return reply.status(200).send({
-        ok: false,
-        emailDeliveryFailed: true,
-        message:
-          "L'email n'a pas pu être envoyé (Brevo). Réessayez plus tard ou contactez le support.",
-      });
-    }
-  });
-
-  app.post<{ Body: { token?: string; password?: string } }>(
-    "/api/auth/reset-password",
+  }>(
+    "/api/auth/forgot-password",
     async (request, reply) => {
+      const email = request.body?.email?.trim() ?? "";
+      const displayName = request.body?.displayName?.trim() ?? email;
+      if (!email) {
+        return reply.status(400).send({ error: "Email requis" });
+      }
+
+      const result = requestPasswordResetForEmail(email, displayName, {
+        passwordResetToken: request.body?.passwordResetToken,
+        passwordResetExpiresAt: request.body?.passwordResetExpiresAt,
+      });
+
+      const resetToken = result.passwordResetToken.trim();
+      if (!resetToken) {
+        return reply.status(500).send({ error: "Token de réinitialisation manquant" });
+      }
+
       try {
-        const token = request.body?.token ?? "";
-        const password = request.body?.password ?? "";
-        const user = await resetPasswordByToken(token, password);
-        const jwt = await createToken(user);
+        await sendPasswordResetEmail(
+          result.email,
+          result.displayName,
+          resetToken,
+        );
         return {
           ok: true,
-          user,
-          token: jwt,
-          message: "Mot de passe mis à jour — vous êtes connecté.",
+          message: FORGOT_PASSWORD_MESSAGE,
+          passwordResetToken: result.passwordResetToken,
+          passwordResetExpiresAt: result.passwordResetExpiresAt,
         };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Réinitialisation échouée";
-        return reply.status(400).send({ error: message });
+      } catch (emailErr) {
+        console.error("[auth] password reset email failed:", emailErr);
+        return reply.status(200).send({
+          ok: false,
+          emailDeliveryFailed: true,
+          message:
+            "L'email n'a pas pu être envoyé (Brevo). Réessayez plus tard ou contactez le support.",
+        });
       }
     },
   );

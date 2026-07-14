@@ -34,7 +34,7 @@ export async function notifyConversationMembers(
   );
   if (memberIds.length === 0) return;
 
-  const subscriptions = await getPushSubscriptionsForUsers(memberIds);
+  const subscriptions = getPushSubscriptionsForUsers(memberIds);
   const data = JSON.stringify(payload);
 
   await Promise.allSettled(

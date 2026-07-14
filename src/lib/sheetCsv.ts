@@ -3,6 +3,11 @@ export function parseBool(value: string | undefined): boolean {
   return v === "true" || v === "1" || v === "yes";
 }
 
+export function numFromSheet(value: string | undefined): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function parseCsvRows(text: string): Record<string, string>[] {
   const lines = text.trim().split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return [];
@@ -15,13 +20,4 @@ export function parseCsvRows(text: string): Record<string, string>[] {
     });
     return row;
   });
-}
-
-export async function fetchCsvRows(url: string): Promise<Record<string, string>[]> {
-  const res = await fetch(url, { headers: { Accept: "text/csv" } });
-  if (!res.ok) {
-    throw new Error(`CSV fetch failed: ${res.status}`);
-  }
-  const text = await res.text();
-  return parseCsvRows(text);
 }

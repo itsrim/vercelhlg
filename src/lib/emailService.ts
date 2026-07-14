@@ -183,7 +183,7 @@ export async function sendVerificationEmail(
     console.warn("[email] Brevo absent — email de vérification non envoyé");
     console.warn(`[email] Transport: ${emailTransportLabel()}`);
     console.warn(`[email] Lien de vérification (dev): ${verifyUrl}`);
-    return;
+    throw new Error("Service email non configuré — définir BREVO_API_KEY");
   }
 
   await sendHtmlEmail(
@@ -208,7 +208,7 @@ export async function sendPasswordResetEmail(
   if (!isEmailConfigured()) {
     console.warn("[email] Brevo absent — email de réinitialisation non envoyé");
     console.warn(`[email] Lien de réinitialisation (dev): ${resetUrl}`);
-    return;
+    throw new Error("Service email non configuré — définir BREVO_API_KEY");
   }
 
   await sendHtmlEmail(

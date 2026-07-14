@@ -239,9 +239,11 @@ export function registerChatSocket(io: Server) {
       const targetUserId = payload?.targetUserId?.trim();
       if (!conversationId || !targetUserId || targetUserId === user.id) return;
 
+      // Le créateur rejoint la room de la conversation
       void socket.join(roomName(conversationId));
       addUserToConversation(user.id, conversationId);
 
+      // Notifie le nouveau membre
       io.to(userRoom(targetUserId)).emit("group:you-added", {
         conversationId,
         addedByUserId: user.id,

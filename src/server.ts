@@ -3,7 +3,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// .env racine (VITE_GOOGLE_SHEETS_*) puis backend/.env (JWT, Brevo…)
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
@@ -11,10 +10,14 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { Server } from "socket.io";
 import { allowedOrigins, port } from "./lib/config.js";
-import { storageMode } from "./lib/chatStore.js";
 import { authStorageMode } from "./lib/authStore.js";
+import { storageMode } from "./lib/chatStore.js";
 import { isPushConfigured } from "./lib/pushService.js";
-import { isSheetsReadConfigured } from "./lib/googleSheets.js";
+import { emailTransportLabel, isEmailConfigured } from "./lib/emailConfig.js";
+import {
+  isSheetsReadConfigured,
+  isSheetsWriteConfigured,
+} from "./lib/googleSheets.js";
 import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chat.js";
 import { pushRoutes } from "./routes/push.js";
@@ -34,8 +37,10 @@ app.get("/api/health", async () => ({
   storage: storageMode(),
   auth: authStorageMode(),
   sheets: isSheetsReadConfigured(),
+  sheetsWrite: isSheetsWriteConfigured(),
   realtime: "socket.io",
   push: isPushConfigured(),
+  email: isEmailConfigured() ? emailTransportLabel() : "not-configured",
   timestamp: Date.now(),
 }));
 
@@ -55,4 +60,4 @@ registerChatSocket(io);
 const listenPort = port();
 await app.listen({ port: listenPort, host: "0.0.0.0" });
 
-app.log.info(`Nel chat API listening on http://0.0.0.0:${listenPort}`);
+app.log.info(`Hlg chat API listening on http://0.0.0.0:${listenPort}`);
