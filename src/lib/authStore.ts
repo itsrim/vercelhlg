@@ -228,6 +228,119 @@ export async function createToken(user: AuthUser): Promise<string> {
     .sign(JWT_SECRET);
 }
 
+/** JWT chat après login validé côté front (Google Sheets). */
+export async function createSessionFromUser(user: AuthUser): Promise<{
+  user: AuthUser;
+  token: string;
+}> {
+  const authUser: AuthUser = {
+    id: user.id,
+    email: user.email.trim().toLowerCase(),
+    displayName: user.displayName.trim(),
+    emailVerified: user.emailVerified !== false,
+  };
+  const token = await createToken(authUser);
+  return { user: authUser, token };
+}
+
+export interface SignupSheetAuth {
+  emailVerified: boolean;
+  verificationToken: string;
+  verificationExpiresAt: number | null;
+}
+
+export interface SignupEmailDispatchResult {
+  user: AuthUser;
+  verificationToken: string;
+  sheetAuth: SignupSheetAuth;
+}
+
+/** Inscription côté front (Sheets) — l'API envoie seulement l'email Brevo. */
+export function signupUserForEmailDispatch(
+  email: string,
+  password: string,
+  displayName: string,
+  options?: {
+    skipEmailVerification?: boolean;
+    userId?: string;
+    verificationToken?: string;
+    verificationExpiresAt?: number | null;
+  },
+): SignupEmailDispatchResult {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail || !password || !displayName.trim()) {
+    throw new Error("Tous les champs sont requis");
+  }
+  if (password.length < 6) {
+    throw new Error("Le mot de passe doit contenir au moins 6 caractères");
+  }
+
+  const skipVerify = options?.skipEmailVerification === true;
+  const fromClient = options?.verificationToken?.trim();
+  const verificationToken = fromClient || createSecureToken();
+  const verificationExpiresAt =
+    options?.verificationExpiresAt != null && options.verificationExpiresAt > 0
+      ? options.verificationExpiresAt
+      : Date.now() + VERIFICATION_TTL_MS;
+
+  const user: AuthUser = {
+    id: options?.userId?.trim() || `user_${Date.now()}_${randomBytes(4).toString("hex")}`,
+    email: normalizedEmail,
+    displayName: displayName.trim(),
+    emailVerified: skipVerify,
+  };
+
+  return {
+    user,
+    verificationToken,
+    sheetAuth: {
+      emailVerified: user.emailVerified ?? false,
+      verificationToken,
+      verificationExpiresAt,
+    },
+  };
+}
+
+export function resendVerificationForEmailDispatch(
+  email: string,
+  displayName: string,
+  options?: { verificationToken?: string; verificationExpiresAt?: number | null },
+): { verificationToken: string; sheetAuth: SignupSheetAuth } {
+  const verificationToken = options?.verificationToken?.trim() || createSecureToken();
+  const verificationExpiresAt =
+    options?.verificationExpiresAt !== undefined
+      ? options.verificationExpiresAt
+      : Date.now() + VERIFICATION_TTL_MS;
+  return {
+    verificationToken,
+    sheetAuth: {
+      emailVerified: false,
+      verificationToken,
+      verificationExpiresAt,
+    },
+  };
+}
+
+export function requestPasswordResetForEmailDispatch(
+  email: string,
+  displayName: string,
+  options?: {
+    passwordResetToken?: string;
+    passwordResetExpiresAt?: number | null;
+  },
+): PasswordResetRequest {
+  const token = options?.passwordResetToken?.trim() || createSecureToken();
+  return {
+    email: email.trim().toLowerCase(),
+    displayName: displayName.trim() || email,
+    passwordResetToken: token,
+    passwordResetExpiresAt:
+      options?.passwordResetExpiresAt != null && options.passwordResetExpiresAt > 0
+        ? options.passwordResetExpiresAt
+        : Date.now() + PASSWORD_RESET_TTL_MS,
+  };
+}
+
 export async function verifyToken(token: string): Promise<AuthUser | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
@@ -377,6 +490,7 @@ export interface PasswordResetRequest {
   email: string;
   displayName: string;
   passwordResetToken: string;
+  passwordResetExpiresAt: number;
 }
 
 export async function requestPasswordResetForEmail(
@@ -397,6 +511,7 @@ export async function requestPasswordResetForEmail(
     email: user.email,
     displayName: user.displayName,
     passwordResetToken: user.passwordResetToken!,
+    passwordResetExpiresAt: user.passwordResetExpiresAt ?? Date.now() + PASSWORD_RESET_TTL_MS,
   };
 }
 

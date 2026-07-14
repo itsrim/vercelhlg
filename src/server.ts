@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// .env racine (VITE_GOOGLE_SHEETS_*) puis backend/.env (JWT, Mailjet…)
+// .env racine (VITE_GOOGLE_SHEETS_*) puis backend/.env (JWT, Brevo…)
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
