@@ -216,7 +216,7 @@ async function findViewerByVerificationToken(
 /** Vérifie le token dans viewer_settings (Google Sheets) et marque emailVerified. */
 export async function verifyEmailByToken(token: string): Promise<AuthUser> {
   if (!isSheetsReadConfigured()) {
-    throw new Error("Google Sheets non configuré");
+    throw new Error("Database problem configuration");
   }
 
   const trimmed = token.trim();

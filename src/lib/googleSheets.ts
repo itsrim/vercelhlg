@@ -83,7 +83,7 @@ function csvExportUrl(table: SheetTableName): string {
   const base = spreadsheetBaseUrl();
   if (!base) {
     throw new Error(
-      "Google Sheets non configuré — définir VITE_GOOGLE_SHEETS_URL_ENCODED dans le .env racine",
+      "Database problem not configurated — définir VITE_GOOGLE_SHEETS_URL_ENCODED dans le .env racine",
     );
   }
   return `${base}/export?format=csv&gid=${gidFor(table)}`;
