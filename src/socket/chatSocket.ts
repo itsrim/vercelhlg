@@ -172,6 +172,25 @@ export function registerChatSocket(io: Server) {
     );
 
     socket.on(
+      "friend:remove",
+      (payload: {
+        recipientUserId?: string;
+        removerUserId?: string;
+        removerName?: string;
+      }) => {
+        const recipientUserId = payload?.recipientUserId?.trim();
+        const removerUserId = payload?.removerUserId?.trim();
+        if (!recipientUserId || recipientUserId === user.id) return;
+        if (!removerUserId || removerUserId !== user.id) return;
+
+        io.to(userRoom(recipientUserId)).emit("friend:removed", {
+          removerUserId: user.id,
+          removerName: payload?.removerName?.trim() || user.displayName,
+        });
+      },
+    );
+
+    socket.on(
       "event-invite:send",
       (payload: {
         recipientUserId?: string;
